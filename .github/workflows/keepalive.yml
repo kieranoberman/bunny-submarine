@@ -1,0 +1,19 @@
+# Supabase's free plan pauses a database after a quiet week (for example in the school holidays).
+# This asks the leaderboard for one score every three days so that never happens. It costs nothing.
+name: Keep the leaderboard awake
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ask the leaderboard for this week's top score
+        run: |
+          URL=$(sed -n "s/.*url: *'\([^']*\)'.*/\1/p" config.js)
+          KEY=$(sed -n "s/.*key: *'\([^']*\)'.*/\1/p" config.js)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Leaderboard not set up yet, nothing to do."; exit 0; fi
+          curl -fsS -X POST "$URL/rest/v1/rpc/leaderboard" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"p_limit":1}'
