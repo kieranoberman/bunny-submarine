@@ -6,7 +6,7 @@
 -- copy of that token is stored here.
 --
 -- Nobody can read or change the tables directly from the website. The website can only call the
--- four functions at the bottom, which check everything they are given.
+-- five functions at the bottom, which check everything they are given.
 
 -------------------------------------------------------------------------------
 -- Tables
@@ -212,16 +212,32 @@ language sql security definer set search_path = public stable as $$
 $$;
 
 -------------------------------------------------------------------------------
--- Who may call what: the website (anon) may call only the four functions above.
+-- 5. Delete a player and all their scores (the child presses "Delete this player")
+-------------------------------------------------------------------------------
+create or replace function public.delete_player(p_id uuid, p_token text)
+returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_count integer;
+begin
+  delete from players where id = p_id and token_hash = bs_hash(coalesce(p_token, ''));
+  get diagnostics v_count = row_count;
+  return json_build_object('ok', v_count > 0);
+end $$;
+
+-------------------------------------------------------------------------------
+-- Who may call what: the website (anon) may call only the five functions above.
 -------------------------------------------------------------------------------
 revoke all on function public.create_player(text, text, integer) from public;
 revoke all on function public.submit_round(uuid, text, integer, integer, integer, integer) from public;
 revoke all on function public.leaderboard(integer, uuid, integer) from public;
 revoke all on function public.check_player(uuid, text) from public;
+revoke all on function public.delete_player(uuid, text) from public;
 grant execute on function public.create_player(text, text, integer) to anon, authenticated;
 grant execute on function public.submit_round(uuid, text, integer, integer, integer, integer) to anon, authenticated;
 grant execute on function public.leaderboard(integer, uuid, integer) to anon, authenticated;
 grant execute on function public.check_player(uuid, text) to anon, authenticated;
+grant execute on function public.delete_player(uuid, text) to anon, authenticated;
 
 -------------------------------------------------------------------------------
 -- Handy commands for you (run them on their own in the SQL Editor when needed):

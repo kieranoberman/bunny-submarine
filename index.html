@@ -230,9 +230,10 @@
     <div class="box">
       <h2 id="removeTitle">Remove?</h2>
       <p id="removeText"></p>
+      <div class="msg" id="removeMsg"></div>
       <div class="btns">
-        <button class="b-blue" id="btnRemoveNo">Keep it</button>
-        <button class="b-green" id="btnRemoveYes" style="background:#e8564a;box-shadow:0 5px 0 #a8352c">Yes, remove</button>
+        <button class="b-blue" id="btnRemoveNo">No, keep them</button>
+        <button class="b-green" id="btnRemoveYes" style="background:#e8564a;box-shadow:0 5px 0 #a8352c">Yes, delete</button>
       </div>
     </div>
   </div>
@@ -597,7 +598,7 @@ function renderHome(){
       '<div class="swatches">Colour: '+COLOURS.map(c=>'<button class="sw'+(c===p.colour?' on':'')+'" data-c="'+c+'" style="background:'+c+'" aria-label="colour"></button>').join('')+'</div>'+
       '<button class="coll">My collection</button>'+
       '<div class="grown">Grown-ups: level <button data-d="-1" aria-label="Easier">'+MINUS+'</button> '+p.level+' <button data-d="1" aria-label="Harder">+</button></div>'+
-      '<button class="remove">Not me? Remove from this device</button>';
+      '<button class="remove">Delete this player (from this device and the leaderboard)</button>';
     wrap.appendChild(card);
     const cv = card.querySelector('canvas'), c = cv.getContext('2d');
     c.scale(2,2);
@@ -642,21 +643,43 @@ function sample(list, n, keep){
   return out.sort(()=>Math.random()-0.5);
 }
 
-let removeId = null;
+let removeId = null, removing = false;
 function askRemove(id){
   removeId = id; const p = store.players[id];
-  $('#removeTitle').textContent = 'Remove ' + p.name + '?';
+  $('#removeTitle').textContent = 'Delete ' + p.name + '?';
   $('#removeText').textContent = p.online
-    ? 'This takes ' + p.name + ' off this device. Scores already on this week\'s leaderboard stay there, '
-      + 'but you won\'t be able to play as ' + p.name + ' on this device again.'
-    : 'This takes ' + p.name + ' off this device, along with their level and collection.';
+    ? 'This deletes ' + p.name + ' from this device and wipes their scores from the leaderboard. It can\'t be undone.'
+    : 'This deletes ' + p.name + ' from this device, along with their level and collection. It can\'t be undone.';
+  $('#removeMsg').textContent = '';
+  $('#btnRemoveYes').disabled = false;
   $('#removeBox').classList.remove('hidden');
 }
+function forgetLocally(id){
+  delete store.players[id]; store.pending = store.pending.filter(x=>x.pid!==id);
+  store.order = store.order.filter(x=>x!==id);
+  if(store.last===id) store.last = null;
+  save();
+}
 $('#btnRemoveNo').addEventListener('click', ()=>$('#removeBox').classList.add('hidden'));
-$('#btnRemoveYes').addEventListener('click', ()=>{
-  delete store.players[removeId]; store.pending = store.pending.filter(x=>x.pid!==removeId);
-  if(store.last===removeId) store.last = null;
-  save(); $('#removeBox').classList.add('hidden'); renderHome();
+$('#btnRemoveYes').addEventListener('click', async ()=>{
+  if(removing) return;
+  const p = store.players[removeId];
+  if(p && p.online && ONLINE){
+    // Delete them from the leaderboard first. If that can't be done now, keep them on the device,
+    // because the device holds the only key that can delete their online scores.
+    removing = true; $('#btnRemoveYes').disabled = true;
+    const msg = $('#removeMsg'); msg.className = 'msg ok'; msg.textContent = 'Deleting…';
+    try{ await api('delete_player', {p_id:p.id, p_token:p.token}); }
+    catch(e){
+      msg.className = 'msg'; msg.textContent = 'Couldn\'t reach the leaderboard, so nothing was deleted. Check the internet and try again.';
+      removing = false; $('#btnRemoveYes').disabled = false; return;
+    }
+    removing = false;
+  }
+  const name = p ? p.name : '';
+  forgetLocally(removeId);
+  $('#removeBox').classList.add('hidden'); renderHome();
+  if(name) toast(name + ' has been deleted.');
 });
 $('#contactEmail').textContent = CONTACT_PARTS[0] + '\u0040' + CONTACT_PARTS[1] + '.' + CONTACT_PARTS[2];
 $('#btnAbout').addEventListener('click', ()=>$('#aboutBox').classList.remove('hidden'));
