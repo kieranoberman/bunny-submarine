@@ -220,7 +220,7 @@
         </ul>
         <p><b>What we don't keep:</b> real names, email addresses, passwords, photos or locations. There are no adverts and nothing is shared with anyone else.</p>
         <p>Your nickname is remembered on this device, so you don't need a password. If you choose to stay off the leaderboard, nothing is sent online at all.</p>
-        <p>Grown-ups: to remove a nickname and its scores, or with any questions, email <b id="contactEmail"></b>.</p>
+        <p>If you have any questions, please email <b id="contactEmail"></b>.</p>
       </div>
       <div class="btns"><button class="b-green" id="btnAboutClose">OK</button></div>
     </div>
@@ -598,7 +598,7 @@ function renderHome(){
       '<div class="swatches">Colour: '+COLOURS.map(c=>'<button class="sw'+(c===p.colour?' on':'')+'" data-c="'+c+'" style="background:'+c+'" aria-label="colour"></button>').join('')+'</div>'+
       '<button class="coll">My collection</button>'+
       '<div class="grown">Grown-ups: level <button data-d="-1" aria-label="Easier">'+MINUS+'</button> '+p.level+' <button data-d="1" aria-label="Harder">+</button></div>'+
-      '<button class="remove">Delete this player (from this device and the leaderboard)</button>';
+      '<button class="remove">Delete this player</button>';
     wrap.appendChild(card);
     const cv = card.querySelector('canvas'), c = cv.getContext('2d');
     c.scale(2,2);
