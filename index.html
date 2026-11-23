@@ -231,6 +231,7 @@
         </ul>
         <p><b>What we don't keep:</b> real names, email addresses, passwords, photos or locations. There are no adverts and nothing is shared with anyone else.</p>
         <p>Your nickname is remembered on this device, so you don't need a password. If you choose to stay off the leaderboard, nothing is sent online at all.</p>
+        <p><b>Grown-ups:</b> if you'd like to test the game (or just play!), feel free to sign up too. Choose "Grown-up" instead of a year group and you'll have your own leaderboard, separate from the children's.</p>
         <p>If you have any questions, please email <b id="contactEmail"></b>.</p>
       </div>
       <div class="btns"><button class="b-green" id="btnAboutClose">OK</button></div>
@@ -407,8 +408,10 @@ const MINUS = '−';
 const CFG = Object.assign({url:'', key:''}, window.BUNNY_CONFIG || {});
 const ONLINE = !!(CFG.url && CFG.key);
 const CONTACT_PARTS = ['kieran.oberman', 'gmail', 'com'];   // joined up when the page runs, to keep it from email-scraping bots
-const YEARS = ['Reception','Year 1','Year 2','Year 3','Year 4','Year 5','Year 6'];
-const START_LEVEL = [1,1,2,3,4,4,5];   // a sensible first level for each year group; it adapts after that
+const YEARS = ['Reception','Year 1','Year 2','Year 3','Year 4','Year 5','Year 6','Grown-up'];   // 7 = grown-up
+const GROWN_UP = 7;
+function yearPhrase(y){ return y===GROWN_UP ? 'among the grown-ups' : 'in ' + YEARS[y]; }
+const START_LEVEL = [1,1,2,3,4,4,5,8];   // a sensible first level for each year group; it adapts after that
 const BREAK_EVERY = 4;                  // suggest a break after this many rounds in a row
 // Nickname words. Keep these in step with the lists in supabase-setup.sql.
 const FIRST_WORDS = ['Captain','Pilot','Admiral','Commander','Skipper','Navigator','Explorer','Professor',
@@ -816,7 +819,7 @@ function openBoard(year, from){
   show('#board'); renderTabs(); loadBoard();
 }
 function renderTabs(){
-  const tabs = [[null,'Whole school']].concat(YEARS.map((y,i)=>[i,y]));
+  const tabs = [[null,'Whole school']].concat(YEARS.map((y,i)=>[i, i===GROWN_UP ? 'Grown-ups' : y]));
   $('#boardTabs').innerHTML = tabs.map(t=>'<button class="tab'+(t[0]===boardYear?' on':'')+'" data-y="'+(t[0]===null?'':t[0])+'">'+t[1]+'</button>').join('');
   $('#boardTabs').querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
     boardYear = b.dataset.y==='' ? null : +b.dataset.y; renderTabs(); loadBoard();
@@ -839,7 +842,7 @@ async function loadBoard(){
   const mine = new Set(Object.values(store.players).filter(p=>p.online).map(p=>p.name));
   const top = (res && res.top) || [];
   if(!top.length){
-    list.innerHTML = '<div class="lb-empty">No scores yet this week' + (boardYear!=null ? ' in ' + YEARS[boardYear] : '') + '. Be the first!</div>';
+    list.innerHTML = '<div class="lb-empty">No scores yet this week' + (boardYear!=null ? ' ' + yearPhrase(boardYear) : '') + '. Be the first!</div>';
   }else{
     const medal = r => r===1?'🥇':r===2?'🥈':r===3?'🥉':r;
     list.innerHTML = top.map(r=>'<div class="lb-row'+(mine.has(r.nickname)?' mine':'')+'">'+
@@ -848,7 +851,7 @@ async function loadBoard(){
   }
   if(me && res && res.me){
     meEl.textContent = me.name + ': ' + ordinal(res.me.rank) + ' out of ' + res.me.of + ', with ' + res.me.score;
-  }else if(me && (boardYear===null || boardYear===me.year)){
+  }else if(me && ((boardYear===null && me.year!==GROWN_UP) || boardYear===me.year)){
     meEl.textContent = me.name + ': no score yet this week';
   }
 }
@@ -1368,7 +1371,7 @@ async function sendRound(p, r){
     const best = res.score >= res.week_best;
     el.innerHTML = 'Leaderboard score: <b>' + res.points + ' × level ' + r.level + ' = ' + res.score + '</b><br>' +
       (best ? '🎉 Your best this week! ' : 'Your best this week is ' + res.week_best + '. ') +
-      'You\'re <b>' + ordinal(res.year_rank) + '</b> in ' + YEARS[res.year] + ' this week.';
+      'You\'re <b>' + ordinal(res.year_rank) + '</b> ' + yearPhrase(res.year) + ' this week.';
   }else if(res && res.error==='unknown_player'){
     p.online = false; p.removed = true; save();
     el.textContent = 'This nickname isn\'t on the leaderboard any more.';

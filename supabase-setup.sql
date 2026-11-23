@@ -14,7 +14,7 @@
 create table if not exists public.players (
   id          uuid primary key default gen_random_uuid(),
   nickname    text not null unique,
-  year_group  smallint not null check (year_group between 0 and 6),   -- 0 = Reception
+  year_group  smallint not null check (year_group between 0 and 7),   -- 0 = Reception, 7 = grown-up
   token_hash  text not null,
   hidden      boolean not null default false,   -- set to true to take a nickname off the leaderboard
   created_at  timestamptz not null default now()
@@ -31,6 +31,10 @@ create table if not exists public.rounds (
   total      smallint not null,
   played_at  timestamptz not null default now()
 );
+-- (for databases set up before grown-ups were added)
+alter table public.players drop constraint if exists players_year_group_check;
+alter table public.players add constraint players_year_group_check check (year_group between 0 and 7);
+
 create index if not exists rounds_played_at_idx on public.rounds (played_at);
 create index if not exists rounds_player_idx    on public.rounds (player_id, played_at);
 
@@ -90,7 +94,7 @@ begin
   if p_second is null or not (p_second = any(bs_second_words())) then
     return json_build_object('ok', false, 'error', 'bad_word');
   end if;
-  if p_year is null or p_year < 0 or p_year > 6 then
+  if p_year is null or p_year < 0 or p_year > 7 then
     return json_build_object('ok', false, 'error', 'bad_year');
   end if;
   -- a simple brake on someone filling the database with nicknames
@@ -181,7 +185,7 @@ begin
     select p.id, p.nickname, p.year_group, max(r.score) as score, min(r.played_at) as first_at
     from rounds r join players p on p.id = r.player_id
     where r.played_at >= bs_week_start() and not p.hidden
-      and (p_year is null or p.year_group = p_year)
+      and ((p_year is null and p.year_group <= 6) or p.year_group = p_year)   -- grown-ups (7) only on their own tab
     group by p.id, p.nickname, p.year_group
   ), ranked as (
     select *, rank() over (order by score desc) as rank,
