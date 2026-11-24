@@ -374,16 +374,17 @@ const ROUND = 120;          // seconds per round
 const MAXLEVEL = 8;
 // R = lines go from -R to +R, J = biggest jump needed, travel = seconds for a thing to cross the screen,
 // gap = seconds between new things. Both get a little quicker through each round.
-// Jumps stop at 9 because a move happens as soon as one number key is pressed.
+// J = biggest jump a thing will need. It grows gradually from level 5 up, so older or quicker
+// children get two-digit moves (typed as two number keys, with a short pause allowed between them).
 const LEVELS = [null,
   {R:5,  J:3, travel:15, gap:9.0},
   {R:5,  J:5, travel:14, gap:8.5},
   {R:6,  J:6, travel:13, gap:8.0},
   {R:10, J:9, travel:14, gap:8.5},
-  {R:10, J:9, travel:12, gap:7.5},
-  {R:10, J:9, travel:10.5, gap:6.5},
-  {R:12, J:9, travel:9.5, gap:6.0},
-  {R:12, J:9, travel:8.5, gap:5.5}
+  {R:10, J:12, travel:12, gap:7.5},
+  {R:10, J:15, travel:10.5, gap:6.5},
+  {R:12, J:18, travel:9.5, gap:6.0},
+  {R:12, J:20, travel:8.5, gap:5.5}
 ];
 const TRAIL_COLOURS = ['#e8398a','#7b4dff','#ff7a1a','#12a150']; // one per thing on screen
 const PERFECT_POINTS = 3;  // caught in one move (or none)
