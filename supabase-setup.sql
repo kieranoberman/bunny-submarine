@@ -23,7 +23,7 @@ create table if not exists public.players (
 create table if not exists public.rounds (
   id         bigserial primary key,
   player_id  uuid not null references public.players(id) on delete cascade,
-  level      smallint not null check (level between 1 and 8),
+  level      smallint not null check (level between 1 and 9),
   points     integer  not null check (points >= 0),
   score      integer  not null check (score >= 0),      -- leaderboard score = points x level
   caught     smallint not null,
@@ -31,6 +31,10 @@ create table if not exists public.rounds (
   total      smallint not null,
   played_at  timestamptz not null default now()
 );
+-- (for databases set up before level 9 was added)
+alter table public.rounds drop constraint if exists rounds_level_check;
+alter table public.rounds add constraint rounds_level_check check (level between 1 and 9);
+
 -- (for databases set up before grown-ups were added)
 alter table public.players drop constraint if exists players_year_group_check;
 alter table public.players add constraint players_year_group_check check (year_group between 0 and 7);
@@ -136,7 +140,7 @@ begin
   end if;
 
   -- sanity checks: a 2 minute round can't hold more than about 40 things
-  if p_level is null or p_level < 1 or p_level > 8
+  if p_level is null or p_level < 1 or p_level > 9
      or p_total   is null or p_total   < 0 or p_total   > 40
      or p_caught  is null or p_caught  < 0 or p_caught  > p_total
      or p_perfect is null or p_perfect < 0 or p_perfect > p_caught then

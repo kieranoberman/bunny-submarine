@@ -145,6 +145,18 @@
       "d4 d4 d5 d5 d6 d6"
       "d1 d1 d2 d2 d3 d3"
       "back back back d0 d0 d0";}
+  /* decimal levels: a . key and an optional GO */
+  #keypad.dec{grid-template-rows:auto 1.15fr 1fr 1fr 1fr 1fr 1fr;
+    grid-template-areas:
+      "disp disp disp disp disp disp"
+      "plus plus plus minus minus minus"
+      "d7 d7 d8 d8 d9 d9"
+      "d4 d4 d5 d5 d6 d6"
+      "d1 d1 d2 d2 d3 d3"
+      "dot dot d0 d0 back back"
+      "go go go go go go";}
+  .k.dot{grid-area:dot; font-size:44px; line-height:.6;}
+  #keypad:not(.dec) .k.dot, #keypad:not(.dec) .k.go{display:none;}
   #disp{grid-area:disp; background:#fff; border-radius:16px; padding:8px 10px; text-align:center; min-height:84px; display:flex; flex-direction:column; justify-content:center;}
   #disp .lab{font-size:14px; color:#6a8396; font-weight:600;}
   #disp .expr{font-size:36px; font-weight:700; white-space:nowrap; line-height:1.15;}
@@ -172,6 +184,13 @@
         "plus plus plus minus minus minus"
         "d1 d2 d3 d4 d5 back"
         "d6 d7 d8 d9 d0 back";}
+    #keypad.dec{height:clamp(270px,40vh,380px); grid-template-rows:auto 1fr 1fr 1fr 1fr;
+      grid-template-areas:
+        "disp disp disp disp disp disp"
+        "plus plus plus minus minus minus"
+        "d1 d2 d3 d4 d5 back"
+        "d6 d7 d8 d9 d0 dot"
+        "go go go go go go";}
     #disp{min-height:56px; flex-direction:row; align-items:center; gap:12px; justify-content:center;}
     #disp .expr{font-size:32px;}
     .k{font-size:30px;}
@@ -214,6 +233,7 @@
     <b>How to play:</b> things float in from the right on different lines. Move the submarine onto their line to catch them.
     Press <b>+</b> to go up or <b>−</b> to go down, then a number, and off you go!
     Above 0 is the sky, below 0 is the sea. You have 2 minutes to catch as many as you can, and it gets faster as you go.
+    <br>At level 9 the lines go up in halves (like 1.5 and −2.5), so there's a <b>.</b> key too.
     <br>Catch something with just <b>one move</b> for a <b>Perfect! 3 points</b>. Taking more moves gets 1 point.
     <br><span style="font-size:15px;color:#6a8396">On a keyboard: the + or − key, then a number key. Backspace if you pressed the wrong + or −.</span>
   </div>
@@ -353,7 +373,9 @@
     <button class="k" data-k="8" style="grid-area:d8">8</button>
     <button class="k" data-k="9" style="grid-area:d9">9</button>
     <button class="k" data-k="0" style="grid-area:d0">0</button>
-    <button class="k back" data-k="back" aria-label="Undo the + or −">⌫</button>
+    <button class="k back" data-k="back" aria-label="Delete">⌫</button>
+    <button class="k dot" data-k="dot" aria-label="Decimal point">.</button>
+    <button class="k go" data-k="go">GO</button>
   </div>
 </div>
 
@@ -371,7 +393,7 @@
 
 /* ================= Settings ================= */
 const ROUND = 120;          // seconds per round
-const MAXLEVEL = 8;
+const MAXLEVEL = 9;
 // R = lines go from -R to +R, J = biggest jump needed, travel = seconds for a thing to cross the screen,
 // gap = seconds between new things. Both get a little quicker through each round.
 // J = biggest jump a thing will need. It grows gradually from level 5 up, so older or quicker
@@ -384,11 +406,15 @@ const LEVELS = [null,
   {R:10, J:12, travel:12, gap:7.5},
   {R:10, J:15, travel:10.5, gap:6.5},
   {R:12, J:18, travel:9.5, gap:6.0},
-  {R:12, J:20, travel:8.5, gap:5.5}
+  {R:12, J:20, travel:8.5, gap:5.5},
+  // Level 9: decimals. step 0.5 means each line is half a unit, so R:10 gives lines from -5 to 5
+  // and J:7 means jumps up to 3.5. Positions are kept in half-steps internally to avoid rounding errors.
+  {R:10, J:7, travel:12, gap:7.5, step:0.5}
 ];
 const TRAIL_COLOURS = ['#e8398a','#7b4dff','#ff7a1a','#12a150']; // one per thing on screen
 const PERFECT_POINTS = 3;  // caught in one move (or none)
 const OTHER_POINTS = 1;    // caught after more than one move
+const DOT_WAIT = 2.0;   // seconds to wait after a . for the digit that follows
 const SECOND_DIGIT_WAIT = 0.9; // seconds to wait for a second digit after a 1 (or 2 on big maps)
 const SPEEDUP = 0.35;   // things move 35% faster by the end of a round
 const GAPSHRINK = 0.25; // and arrive 25% closer together
@@ -480,6 +506,10 @@ function toggleMute(){ store.muted = !store.muted; save(); setMuteIcons(); if(!s
 /* ================= Helpers ================= */
 function $(s){ return document.querySelector(s); }
 function fmt(v){ return v < 0 ? MINUS + Math.abs(v) : String(v); }
+// A real number with at most one decimal place: 2, 1.5, −0.5
+function fmtNum(x){ const r = Math.round(Math.abs(x)*10)/10; return (x < 0 ? MINUS : '') + (Number.isInteger(r) ? String(r) : r.toFixed(1)); }
+// A position on the lines (kept in steps) as the number the child sees
+function fmtU(u){ return G && G.step && G.step !== 1 ? fmtNum(u * G.step) : fmt(u); }
 function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 function shade(hex, amt){
@@ -941,6 +971,8 @@ function startGame(id){
   initDecor();
   show('#game');
   $('#endBox').classList.add('hidden'); $('#pauseBox').classList.add('hidden');
+  G.step = L.step || 1;
+  $('#keypad').classList.toggle('dec', G.step < 1);
   $('#hudName').textContent = p.name + ' · Level ' + p.level;
   updateHud(); updatePad();
   resize();
@@ -961,7 +993,9 @@ function spawn(){
   const crossers = cands.filter(v=>v!==0 && from!==0 && Math.sign(v)!==Math.sign(from));
   const r = Math.random();
   let lvl;
-  if(crossers.length && r < 0.35) lvl = pick(crossers);
+  const halves = G.step < 1 ? cands.filter(v=>Math.abs(v-from) % 2 === 1) : [];   // jumps like 1.5 or 2.5
+  if(halves.length && Math.random() < 0.7) lvl = pick(halves);
+  else if(crossers.length && r < 0.35) lvl = pick(crossers);
   else if(cands.includes(0) && r < 0.45) lvl = 0;
   else if(bigOnes.length && G.p.level >= 4 && r < 0.75) lvl = pick(bigOnes);
   else lvl = pick(cands);
@@ -976,12 +1010,20 @@ function doMove(){
   if(!G || G.state!=='play' || G.paused) return;
   if(!G.sign){ toast('First press + or ' + MINUS); sfx.bonk(); flashKey('+'); return; }
   if(G.digits===''){ toast('Now press a number'); sfx.bonk(); return; }
-  const n = parseInt(G.digits,10);
-  const from = G.value;
-  const to = G.sign==='+' ? from + n : from - n;
-  const expr = fmt(from)+' '+(G.sign==='+'?'+':MINUS)+' '+n+' = '+fmt(to);
-  G.sign = null; G.digits = ''; G.waitUntil = null;
+  const typed = G.digits.replace(/\.$/, '');
+  const amount = parseFloat(typed);
+  const from = G.value, signTxt = (G.sign==='+'?'+':MINUS);
+  const units = amount / G.step;
   G.tries++;   // moves made since the last thing was caught or missed
+  if(isNaN(amount) || Math.abs(units - Math.round(units)) > 1e-9){
+    G.bubble = {text: fmtU(from)+' '+signTxt+' '+typed, note:'On this level, moves go in halves, like 1.5', bad:true, t:G.t};
+    G.sign = null; G.digits = ''; G.waitUntil = null;
+    sfx.bonk(); updatePad(); return;
+  }
+  const n = Math.round(units);
+  const to = G.sign==='+' ? from + n : from - n;
+  const expr = fmtU(from)+' '+signTxt+' '+fmtNum(amount)+' = '+fmtU(to);
+  G.sign = null; G.digits = ''; G.waitUntil = null;
   if(to > G.R || to < -G.R){
     G.bubble = {text:expr, note: to > G.R ? 'Too high! Off the top.' : 'Too deep! Off the bottom.', bad:true, t:G.t};
     sfx.bonk(); updatePad(); return;
@@ -1160,7 +1202,7 @@ function draw(){
     }
     c.fillStyle = (tg && !here) ? '#ffffff' : (v===0 ? '#0a5c96' : (v>0 ? '#123047' : '#1f4a6b'));
     c.font = (v===0 || here || tg ? '700 ' : '600 ') + (v===0 ? fs*1.12 : fs) + 'px ' + FONT;
-    c.fillText(fmt(v), g.labelW/2, y+1);
+    c.fillText(fmtU(v), g.labelW/2, y+1);
   }
 
   // targets
@@ -1240,7 +1282,7 @@ function draw(){
     const txt = n>0 ? String(n) : 'GO!';
     c.strokeText(txt, W/2, H*0.45); c.fillText(txt, W/2, H*0.45);
     c.font='700 '+clamp(CH*0.045,18,30)+'px '+FONT; c.lineWidth=6; c.fillStyle='#fff';
-    const tip = 'Move onto a thing’s line to catch it!';
+    const tip = G.step < 1 ? 'Halves level! Use the . key for numbers like 1.5' : 'Move onto a thing’s line to catch it!';
     c.strokeText(tip, W/2, H*0.45 + clamp(CH*0.15,50,120)); c.fillText(tip, W/2, H*0.45 + clamp(CH*0.15,50,120));
   }
 }
@@ -1256,7 +1298,7 @@ function updateHud(){
 function updatePad(){
   if(!G) return;
   const e = $('#expr');
-  let html = '<span>'+fmt(G.value)+'</span>';
+  let html = '<span>'+fmtU(G.value)+'</span>';
   if(G.sign){
     html += ' <span class="sg'+(G.sign==='-'?' m':'')+'">'+(G.sign==='+'?'+':MINUS)+'</span> ';
     html += G.digits ? '<span>'+G.digits+'</span>' : '<span class="q">?</span>';
@@ -1275,24 +1317,42 @@ function press(k){
     G.sign = k; sfx.key();
   }
   else if(k==='back'){
-    if(G.digits){ G.digits = G.digits.slice(0,-1); G.waitUntil = null; } else G.sign = null;
+    if(G.digits){ G.digits = G.digits.slice(0,-1); G.waitUntil = G.digits ? G.t + DOT_WAIT : null; } else G.sign = null;
     sfx.key();
+  }
+  else if(k==='go'){
+    if(G.digits){ doMove(); return; }
+    if(G.sign){ toast('Now press a number'); sfx.bonk(); return; }
+    toast('First press + or ' + MINUS); sfx.bonk(); return;
+  }
+  else if(k==='dot'){
+    if(G.step === 1) return;            // only decimal levels have a point
+    if(!G.sign){ toast('First press + or ' + MINUS); sfx.bonk(); return; }
+    if(G.digits.includes('.')) return;
+    G.digits = (G.waitUntil && G.digits) ? G.digits + '.' : '0.';
+    G.waitUntil = G.t + DOT_WAIT; sfx.key();
   }
   else if(/^[0-9]$/.test(k)){
     if(!G.sign){ toast('First press + or ' + MINUS); sfx.bonk(); return; }
-    if(G.waitUntil){                    // second digit: move now with the two-digit number
-      G.digits += k; G.waitUntil = null; doMove(); return;
-    }
-    G.digits = k;
-    // Could this digit be the start of a two-digit jump that still fits on the screen?
-    const room = G.sign==='+' ? G.R - G.value : G.value + G.R;
-    if(k !== '0' && (+k)*10 <= room){
-      G.waitUntil = G.t + SECOND_DIGIT_WAIT; sfx.key();   // wait briefly for a second digit
+    G.digits = G.waitUntil ? G.digits + k : k;
+    if(couldGrow()){
+      G.waitUntil = G.t + (G.digits.endsWith('.') ? DOT_WAIT : SECOND_DIGIT_WAIT); sfx.key();   // wait briefly for more
     }else{
-      doMove(); return;                 // only one digit is possible, so move straight away
+      doMove(); return;                 // nothing more could follow, so move straight away
     }
   }
   updatePad();
+}
+// Could the number typed so far still grow into a jump that fits on the screen
+// (a second digit, or a decimal point on the decimal level)?
+function couldGrow(){
+  const d = G.digits, step = G.step;
+  if(d.includes('.')) return d.endsWith('.');          // after the point, one digit finishes it
+  const n = +d;
+  const room = (G.sign==='+' ? G.R - G.value : G.value + G.R) * step;
+  const moreDigits = d !== '0' && d.length < 2 && n*10 <= room;
+  const point = step < 1 && n + step <= room + 1e-9;
+  return moreDigits || point;
 }
 function flashKey(k){
   const b = document.querySelector('.k[data-k="'+k+'"]'); if(!b) return;
@@ -1309,6 +1369,8 @@ window.addEventListener('keydown', ev=>{
   else if(ev.key==='-' || ev.key==='_' || ev.key==='−') k='-';
   else if(/^[0-9]$/.test(ev.key)) k=ev.key;
   else if(ev.key==='Backspace' || ev.key==='Delete') k='back';
+  else if(ev.key==='.' || ev.key===',') k='dot';
+  else if(ev.key==='Enter') k='go';
   else if(ev.key==='Escape' || ev.key==='p'){ if(G.state==='play') setPaused(!G.paused); ev.preventDefault(); return; }
   if(k){ ev.preventDefault(); audio(); flashKey(k); press(k); }
 });
@@ -1335,7 +1397,7 @@ function endRound(){
   if(newBest) p.bestPts = G.points;
   for(const k in G.haul) p.coll[k] = (p.coll[k]||0) + G.haul[k];
   let msg;
-  if(perfectRate >= 0.6 && G.perfect >= 6 && p.level < MAXLEVEL){ p.level++; msg = 'Brilliant flying! Next game goes up to level '+p.level+'.'; }
+  if(perfectRate >= 0.6 && G.perfect >= 6 && p.level < MAXLEVEL){ p.level++; msg = p.level===9 ? 'Brilliant flying! Next game is level 9: decimals!' : 'Brilliant flying! Next game goes up to level '+p.level+'.'; }
   else if(perfectRate < 0.25 && p.level > 1){ p.level--; msg = 'Next game will be level '+p.level+', a little easier.'; }
   else msg = 'Next game stays on level '+p.level+'.';
   save();
