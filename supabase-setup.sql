@@ -23,17 +23,17 @@ create table if not exists public.players (
 create table if not exists public.rounds (
   id         bigserial primary key,
   player_id  uuid not null references public.players(id) on delete cascade,
-  level      smallint not null check (level between 1 and 9),
+  level      smallint not null check (level between 1 and 11),
   points     integer  not null check (points >= 0),
-  score      integer  not null check (score >= 0),      -- leaderboard score = points x level
+  score      integer  not null check (score >= 0),      -- leaderboard score = points x square root of level, rounded
   caught     smallint not null,
   perfect    smallint not null,
   total      smallint not null,
   played_at  timestamptz not null default now()
 );
--- (for databases set up before level 9 was added)
+-- (for databases set up before levels 9 to 11 were added)
 alter table public.rounds drop constraint if exists rounds_level_check;
-alter table public.rounds add constraint rounds_level_check check (level between 1 and 9);
+alter table public.rounds add constraint rounds_level_check check (level between 1 and 11);
 
 -- (for databases set up before grown-ups were added)
 alter table public.players drop constraint if exists players_year_group_check;
@@ -140,7 +140,7 @@ begin
   end if;
 
   -- sanity checks: a 2 minute round can't hold more than about 40 things
-  if p_level is null or p_level < 1 or p_level > 9
+  if p_level is null or p_level < 1 or p_level > 11
      or p_total   is null or p_total   < 0 or p_total   > 40
      or p_caught  is null or p_caught  < 0 or p_caught  > p_total
      or p_perfect is null or p_perfect < 0 or p_perfect > p_caught then
@@ -153,7 +153,9 @@ begin
 
   -- points are worked out here, not trusted from the device: 3 for a perfect catch, 1 otherwise
   v_points := p_perfect * 3 + (p_caught - p_perfect);
-  v_score  := v_points * p_level;
+  -- higher levels earn a bonus, but a gentle one: points x the square root of the level
+  -- (level 4 counts double, level 9 triple), so doing well at your own level matters most
+  v_score  := round(v_points * sqrt(p_level))::integer;
 
   insert into rounds (player_id, level, points, score, caught, perfect, total)
   values (p_id, p_level, v_points, v_score, p_caught, p_perfect, p_total);
@@ -246,6 +248,10 @@ grant execute on function public.submit_round(uuid, text, integer, integer, inte
 grant execute on function public.leaderboard(integer, uuid, integer) to anon, authenticated;
 grant execute on function public.check_player(uuid, text) to anon, authenticated;
 grant execute on function public.delete_player(uuid, text) to anon, authenticated;
+
+-- Make sure every round uses the current scoring formula (harmless to run again)
+update public.rounds set score = round(points * sqrt(level))::integer
+where score <> round(points * sqrt(level))::integer;
 
 -------------------------------------------------------------------------------
 -- Handy commands for you (run them on their own in the SQL Editor when needed):

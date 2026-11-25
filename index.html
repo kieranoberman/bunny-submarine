@@ -233,7 +233,7 @@
     <b>How to play:</b> things float in from the right on different lines. Move the submarine onto their line to catch them.
     Press <b>+</b> to go up or <b>−</b> to go down, then a number, and off you go!
     Above 0 is the sky, below 0 is the sea. You have 2 minutes to catch as many as you can, and it gets faster as you go.
-    <br>At level 9 the lines go up in halves (like 1.5 and −2.5), so there's a <b>.</b> key too.
+    <br>From level 9 the lines go up in halves (like 1.5 and 2.5), so there's a <b>.</b> key too.
     <br>Catch something with just <b>one move</b> for a <b>Perfect! 3 points</b>. Taking more moves gets 1 point.
     <br><span style="font-size:15px;color:#6a8396">On a keyboard: the + or − key, then a number key. Backspace if you pressed the wrong + or −.</span>
   </div>
@@ -307,7 +307,7 @@
     <div class="tabs" id="boardTabs"></div>
     <div id="boardList"></div>
     <div class="lb-me" id="boardMe"></div>
-    <p class="lb-note">Your score is your best round this week: points × your level. It resets every Monday.</p>
+    <p class="lb-note">Your score is your best round this week: your points, with a bonus for higher levels. It resets every Monday.</p>
   </div>
   <div class="row-btns">
     <button class="bigbtn white" id="boardBack">Back</button>
@@ -393,7 +393,8 @@
 
 /* ================= Settings ================= */
 const ROUND = 120;          // seconds per round
-const MAXLEVEL = 9;
+const MAXLEVEL = 11;
+const LEVEL_NOTE = {9:'decimals above the sea!', 10:'decimals under the sea!', 11:'decimals on both sides of 0!'};
 // R = lines go from -R to +R, J = biggest jump needed, travel = seconds for a thing to cross the screen,
 // gap = seconds between new things. Both get a little quicker through each round.
 // J = biggest jump a thing will need. It grows gradually from level 5 up, so older or quicker
@@ -407,9 +408,12 @@ const LEVELS = [null,
   {R:10, J:15, travel:10.5, gap:6.5},
   {R:12, J:18, travel:9.5, gap:6.0},
   {R:12, J:20, travel:8.5, gap:5.5},
-  // Level 9: decimals. step 0.5 means each line is half a unit, so R:10 gives lines from -5 to 5
-  // and J:7 means jumps up to 3.5. Positions are kept in half-steps internally to avoid rounding errors.
-  {R:10, J:7, travel:12, gap:7.5, step:0.5}
+  // Levels 9 to 11: decimals. step 0.5 means each line is half a unit, so 10 steps = 5, and J:7 means
+  // jumps up to 3.5. Positions are kept in half-steps internally to avoid rounding errors.
+  // lo/hi are the bottom and top lines (in steps) when they aren't simply -R to R.
+  {R:10, lo:0,   hi:10, J:7, travel:13, gap:8.0, step:0.5},   // 9: halves above the sea (0 to 5)
+  {R:10, lo:-10, hi:0,  J:7, travel:13, gap:8.0, step:0.5},   // 10: halves under the sea (0 to -5)
+  {R:10, J:7, travel:12, gap:7.5, step:0.5}                    // 11: halves on both sides of 0 (-5 to 5)
 ];
 const TRAIL_COLOURS = ['#e8398a','#7b4dff','#ff7a1a','#12a150']; // one per thing on screen
 const PERFECT_POINTS = 3;  // caught in one move (or none)
@@ -937,11 +941,11 @@ function geo(){
   const labelW = clamp(CW*0.065, 48, 66);
   const subW = clamp(Math.min(CH*0.12, CW*0.14), 60, 120);
   const top = 58 + subW*0.6, bottom = 26;   // room above the top line for the rabbit's head
-  const sp = (CH - top - bottom) / (2*R);
+  const sp = (CH - top - bottom) / (G.hi - G.lo);
   const subX = labelW + subW*0.62 + 10;
   const item = clamp(sp*0.95, 22, 54);
   const startX = CW + item;
-  return {R, labelW, top, bottom, sp, subW, subX, item, startX, yOf:(v)=>top + (R - v)*sp};
+  return {R, labelW, top, bottom, sp, subW, subX, item, startX, yOf:(v)=>top + (G.hi - v)*sp};
 }
 
 /* Keyboard focus: when the game sits inside another page (like the Claude link), key presses only
@@ -965,7 +969,7 @@ function startGame(id){
   const p = store.players[id];
   const L = LEVELS[p.level];
   if(!p.guest){ store.last = id; save(); }
-  G = {id, p, L, lvl:p.level, R:L.R, value:0, disp:0, anim:null, targets:[], parts:[], floats:[], bubble:null,
+  G = {id, p, L, lvl:p.level, R:L.R, lo:(L.lo!=null ? L.lo : -L.R), hi:(L.hi!=null ? L.hi : L.R), value:0, disp:0, anim:null, targets:[], parts:[], floats:[], bubble:null,
        t:0, elapsed:0, nextSpawn:1.2, plan:0, caught:0, missed:0, perfect:0, points:0, tries:0, haul:{}, sign:null, digits:'',
        state:'countdown', cd:3.6, lastBeep:4, paused:false};
   initDecor();
@@ -987,7 +991,7 @@ function spawn(){
   const from = pending ? G.plan : G.value;
   const R = G.R, J = G.L.J;
   const cands = [];
-  for(let v=-R; v<=R; v++){ const d = v - from; if(d!==0 && Math.abs(d)<=J) cands.push(v); }
+  for(let v=G.lo; v<=G.hi; v++){ const d = v - from; if(d!==0 && Math.abs(d)<=J) cands.push(v); }
   // at higher levels, prefer bigger jumps a little
   const bigOnes = cands.filter(v=>Math.abs(v-from) >= Math.ceil(J/2));
   const crossers = cands.filter(v=>v!==0 && from!==0 && Math.sign(v)!==Math.sign(from));
@@ -1024,8 +1028,11 @@ function doMove(){
   const to = G.sign==='+' ? from + n : from - n;
   const expr = fmtU(from)+' '+signTxt+' '+fmtNum(amount)+' = '+fmtU(to);
   G.sign = null; G.digits = ''; G.waitUntil = null;
-  if(to > G.R || to < -G.R){
-    G.bubble = {text:expr, note: to > G.R ? 'Too high! Off the top.' : 'Too deep! Off the bottom.', bad:true, t:G.t};
+  if(to > G.hi || to < G.lo){
+    const note = (G.hi===0 && to>0) ? 'This level stays under the sea!'
+               : (G.lo===0 && to<0) ? 'This level stays above the sea!'
+               : to > G.hi ? 'Too high! Off the top.' : 'Too deep! Off the bottom.';
+    G.bubble = {text:expr, note, bad:true, t:G.t};
     sfx.bonk(); updatePad(); return;
   }
   G.bubble = {text:expr, bad:false, t:G.t};
@@ -1166,7 +1173,7 @@ function draw(){
 
   // number lines
   c.lineWidth = 2; c.setLineDash([8,9]);
-  for(let v=-R; v<=R; v++){
+  for(let v=G.lo; v<=G.hi; v++){
     if(v===0) continue;
     const y = g.yOf(v);
     c.strokeStyle = v>0 ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.35)';
@@ -1191,7 +1198,7 @@ function draw(){
   const fs = clamp(g.sp*0.72, 12, 26);
   const pillH = Math.min(Math.max(fs*1.35, 20), g.sp + 4);
   c.textAlign='center'; c.textBaseline='middle';
-  for(let v=-R; v<=R; v++){
+  for(let v=G.lo; v<=G.hi; v++){
     const y = g.yOf(v);
     const tg = live.find(t=>t.lvl===v);
     const here = v === G.value;
@@ -1282,7 +1289,10 @@ function draw(){
     const txt = n>0 ? String(n) : 'GO!';
     c.strokeText(txt, W/2, H*0.45); c.fillText(txt, W/2, H*0.45);
     c.font='700 '+clamp(CH*0.045,18,30)+'px '+FONT; c.lineWidth=6; c.fillStyle='#fff';
-    const tip = G.step < 1 ? 'Halves level! Use the . key for numbers like 1.5' : 'Move onto a thing’s line to catch it!';
+    const tip = G.step === 1 ? 'Move onto a thing’s line to catch it!'
+              : G.lo === 0 ? 'Halves above the sea! Use the . key for numbers like 1.5'
+              : G.hi === 0 ? 'Halves under the sea! Use the . key for numbers like 1.5'
+              : 'Halves on both sides of 0! Use the . key for numbers like 1.5';
     c.strokeText(tip, W/2, H*0.45 + clamp(CH*0.15,50,120)); c.fillText(tip, W/2, H*0.45 + clamp(CH*0.15,50,120));
   }
 }
@@ -1349,7 +1359,7 @@ function couldGrow(){
   const d = G.digits, step = G.step;
   if(d.includes('.')) return d.endsWith('.');          // after the point, one digit finishes it
   const n = +d;
-  const room = (G.sign==='+' ? G.R - G.value : G.value + G.R) * step;
+  const room = (G.sign==='+' ? G.hi - G.value : G.value - G.lo) * step;
   const moreDigits = d !== '0' && d.length < 2 && n*10 <= room;
   const point = step < 1 && n + step <= room + 1e-9;
   return moreDigits || point;
@@ -1397,7 +1407,7 @@ function endRound(){
   if(newBest) p.bestPts = G.points;
   for(const k in G.haul) p.coll[k] = (p.coll[k]||0) + G.haul[k];
   let msg;
-  if(perfectRate >= 0.6 && G.perfect >= 6 && p.level < MAXLEVEL){ p.level++; msg = p.level===9 ? 'Brilliant flying! Next game is level 9: decimals!' : 'Brilliant flying! Next game goes up to level '+p.level+'.'; }
+  if(perfectRate >= 0.6 && G.perfect >= 6 && p.level < MAXLEVEL){ p.level++; msg = 'Brilliant flying! Next game is level '+p.level+(LEVEL_NOTE[p.level] ? ': '+LEVEL_NOTE[p.level] : '')+'.'; }
   else if(perfectRate < 0.25 && p.level > 1){ p.level--; msg = 'Next game will be level '+p.level+', a little easier.'; }
   else msg = 'Next game stays on level '+p.level+'.';
   save();
@@ -1432,7 +1442,7 @@ async function sendRound(p, r){
   }
   if(res && res.ok){
     const best = res.score >= res.week_best;
-    el.innerHTML = 'Leaderboard score: <b>' + res.points + ' × level ' + r.level + ' = ' + res.score + '</b><br>' +
+    el.innerHTML = 'Leaderboard score: <b>' + res.score + '</b> (' + res.points + ' points, with a level ' + r.level + ' bonus)<br>' +
       (best ? '🎉 Your best this week! ' : 'Your best this week is ' + res.week_best + '. ') +
       'You\'re <b>' + ordinal(res.year_rank) + '</b> ' + yearPhrase(res.year) + ' this week.';
   }else if(res && res.error==='unknown_player'){
