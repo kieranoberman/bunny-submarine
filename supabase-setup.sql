@@ -54,6 +54,7 @@ revoke all on sequence public.rounds_id_seq from anon, authenticated;
 -------------------------------------------------------------------------------
 -- The words children build their nickname from. Keep this in step with the lists in index.html.
 create or replace function public.bs_first_words() returns text[]
+set search_path = public
 language sql immutable as $$
   select array['Captain','Pilot','Admiral','Commander','Skipper','Navigator','Explorer','Professor',
                'Chief','Agent','Ranger','Major','Champion','Inventor','Wizard','Ace',
@@ -62,6 +63,7 @@ language sql immutable as $$
 $$;
 
 create or replace function public.bs_second_words() returns text[]
+set search_path = public
 language sql immutable as $$
   select array['Big Ears','Floppy Ears','Fluffy','Fluffytail','Cottontail','Bobtail','Whiskers','Nibbles',
                'Hoppy','Hopscotch','Bounce','Snowball','Velvet','Buttons','Clover','Dandelion',
@@ -72,11 +74,13 @@ $$;
 
 -- Monday 00:00 London time of the current week: the leaderboard starts afresh then.
 create or replace function public.bs_week_start() returns timestamptz
+set search_path = public
 language sql stable as $$
   select (date_trunc('week', now() at time zone 'Europe/London')) at time zone 'Europe/London'
 $$;
 
 create or replace function public.bs_hash(t text) returns text
+set search_path = public
 language sql immutable as $$
   select encode(sha256(convert_to(t, 'UTF8')), 'hex')
 $$;
@@ -238,6 +242,13 @@ end $$;
 -------------------------------------------------------------------------------
 -- Who may call what: the website (anon) may call only the five functions above.
 -------------------------------------------------------------------------------
+-- Supabase's own automatic-RLS helper (if the project has it) doesn't need to be callable from the website
+do $$ begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from anon, authenticated, public;
+  end if;
+end $$;
+
 revoke all on function public.create_player(text, text, integer) from public;
 revoke all on function public.submit_round(uuid, text, integer, integer, integer, integer) from public;
 revoke all on function public.leaderboard(integer, uuid, integer) from public;
