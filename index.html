@@ -1155,17 +1155,19 @@ function draw(){
     c.fill();
   });
 
-  // sea floor and seaweed
-  c.fillStyle='#e8cf8f'; c.beginPath(); c.moveTo(0,H);
-  for(let x=0;x<=W;x+=40) c.lineTo(x, H-8-Math.sin(x*0.02)*4);
-  c.lineTo(W,H); c.closePath(); c.fill();
-  c.strokeStyle='#2e9e5a'; c.lineWidth=5; c.lineCap='round';
-  decor.weeds.forEach(w=>{
-    const x = w.x*W, hgt = Math.min(70, (H-y0)*0.3)*w.h;
-    c.beginPath(); c.moveTo(x,H-6);
-    for(let i=1;i<=6;i++){ c.lineTo(x + Math.sin(G.t*1.5 + w.p + i)*6, H-6 - hgt*i/6); }
-    c.stroke();
-  });
+  // sea floor and seaweed (left out on the above-the-sea level, where only a strip of sea shows)
+  if(G.lo < 0){
+    c.fillStyle='#e8cf8f'; c.beginPath(); c.moveTo(0,H);
+    for(let x=0;x<=W;x+=40) c.lineTo(x, H-8-Math.sin(x*0.02)*4);
+    c.lineTo(W,H); c.closePath(); c.fill();
+    c.strokeStyle='#2e9e5a'; c.lineWidth=5; c.lineCap='round';
+    decor.weeds.forEach(w=>{
+      const x = w.x*W, hgt = Math.min(70, (H-y0)*0.3)*w.h;
+      c.beginPath(); c.moveTo(x,H-6);
+      for(let i=1;i<=6;i++){ c.lineTo(x + Math.sin(G.t*1.5 + w.p + i)*6, H-6 - hgt*i/6); }
+      c.stroke();
+    });
+  }
 
   // bubbles
   c.strokeStyle='rgba(255,255,255,.45)'; c.lineWidth=1.5;
