@@ -1345,7 +1345,7 @@ function press(k){
   else if(/^[0-9]$/.test(k)){
     if(!G.sign){ toast('First press + or ' + MINUS); sfx.bonk(); return; }
     G.digits = G.waitUntil ? G.digits + k : k;
-    if(couldGrow()){
+    if(couldGrow() && !landsOnTarget()){
       G.waitUntil = G.t + (G.digits.endsWith('.') ? DOT_WAIT : SECOND_DIGIT_WAIT); sfx.key();   // wait briefly for more
     }else{
       doMove(); return;                 // nothing more could follow, so move straight away
@@ -1363,6 +1363,15 @@ function couldGrow(){
   const moreDigits = d !== '0' && d.length < 2 && n*10 <= room;
   const point = step < 1 && n + step <= room + 1e-9;
   return moreDigits || point;
+}
+// If the number typed so far would land the bunny exactly on something that's on its way,
+// there's no need to wait for a second digit or a decimal point: move straight away.
+function landsOnTarget(){
+  if(G.digits.includes('.')) return false;
+  const units = (+G.digits) / G.step;
+  if(!Number.isInteger(units)) return false;
+  const to = G.sign==='+' ? G.value + units : G.value - units;
+  return G.targets.some(t=>!t.done && t.lvl===to);
 }
 function flashKey(k){
   const b = document.querySelector('.k[data-k="'+k+'"]'); if(!b) return;
